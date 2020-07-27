@@ -14,6 +14,8 @@ library(foreach)
 library(doSNOW)
 library(metafor)
 library(grid)
+library(boot)
+library(diagram)
 
 
 theme_set(theme_cowplot())
@@ -345,6 +347,99 @@ f4
 #######################################################################
 #                       Supplementary figures
 #######################################################################
+
+#===========================================================
+#    Figure ST1.1 - impact on F2 PTB
+#===========================================================
+# panel c mediation analysis
+# Baron & Kenny method https://ademos.people.uic.edu/Chapter14.html#22_method_1:_baron__kenny
+# bootstrap https://www.youtube.com/watch?v=Llnvitb-uFI
+cpath <- rma(F2.log.mean, sei = F2.log.sd, mods =  ~ CSSI, data = TB.RR.agg[!is.na(TB.RR.agg$F2.log.mean),], method = "SJ")
+apath <- rma(F1.log.mean, sei = F1.log.sd, mods =  ~ CSSI, data = TB.RR.agg[!is.na(TB.RR.agg$F2.log.mean),], method = "SJ")
+bpath <- rma(F2.log.mean, sei = F2.log.sd, mods =  ~ F1.log.mean + CSSI, data = TB.RR.agg[!is.na(TB.RR.agg$F2.log.mean),], method = "SJ")
+
+
+total = coef(cpath)[2]
+direct = coef(bpath)[3]
+indirect = coef(apath)[2]*coef(bpath)[2]
+
+indirect.boot <- function(dataset, random){
+  d = dataset[random,]
+  apath <- rma(F1.log.mean, sei = F1.log.sd, mods =  ~ CSSI, data = d, method = "SJ")
+  bpath <- rma(F2.log.mean, sei = F2.log.sd, mods =  ~ F1.log.mean + CSSI, data = d, method = "SJ")
+  indirect = coef(apath)[2]*coef(bpath)[2]
+  return(indirect)
+}
+
+
+bootresult <- boot(data = TB.RR.agg[!is.na(TB.RR.agg$F2.log.mean),], statistic = indirect.boot, R = 1000)
+boot.ci(bootresult, conf = .95)
+ecdf(bootresult$t)(0)
+
+
+# interquantile change for direct and indirect effect
+# cpath
+round(quantile((exp(0.082486*rnorm(10000000, summary(cpath)$beta[2], summary(cpath)$se[2]))-1)*100, c(0.025, 0.5, 0.975)), 2)
+# bpath
+round(quantile((exp(0.082486*bootresult$t)-1)*100, c(0.025, 0.5, 0.975)), 2)
+
+# panel A RR
+fst1.1 <- TB.RR.SC.agg %>% filter(Generation == "F2.RR") %>% ggplot(aes(x = Sex, y = mean, ymin = low, ymax = high, col = Sex)) + 
+  geom_errorbar(aes(width = .2)) + 
+  geom_point() + 
+  scale_color_manual(name = "",values = rev(gg_color_hue(2))) + 
+  ylim(1, 1.32) + 
+  ylab("IRR") + 
+  geom_hline(yintercept = 1, linetype = 3) + 
+  xlab("") + 
+  theme(legend.position = c(0.55, 0.95), plot.title = element_text(hjust = 0), axis.text.x = element_blank(), axis.ticks.x = element_blank(), plot.margin = unit(c(0.4,0.1,0,0.1), "cm")) +
+  ggtitle("(A) F2 IRR by sex")
+
+# Panel B IRR map
+SC.shp@data <- SC.shp@data[,!names(SC.shp@data) %in% c("F1.mean","F2.mean")]
+SC.shp@data <- left_join(SC.shp@data, TB.RR.agg[,c("Pref","F1.mean", "F2.mean")])
+
+tm_shape(SC.shp) + tm_fill(c("F2.mean"), breaks = classIntervals(SC.shp$F2.mean, n = 5, style = "quantile")$brks, title = "IRR", legend.format = list(fun = function(x) round(x, 2)), textNA = "Excluded") + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("(B) F2 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
+fst1.2 <- grid.grab()
+
+
+
+# Panel C
+library(diagram)
+fst1.3 <- function()
+{
+  par(xpd = NA, bg = "transparent", mar = c(0.5, 0.5, 1.2, 0.5))
+  openplotmat()
+  title("(C) Mediation analysis", line = -0.5, adj = 0.25)
+  coord <- matrix(c(0.5, 0.8,
+                    0.15, 0.2,
+                    0.85, 0.2), byrow = TRUE, nrow = 3)
+  fromto <- matrix(ncol = 2, byrow = TRUE, data = c(2, 1, 1, 3, 2, 3))
+  
+  arrpos <- matrix(ncol = 2, nrow = 3)
+  for(i in 1:3)
+  {
+    arrpos[i,] <- straightarrow(to = coord[fromto[i,2],], from = coord[fromto[i,1],]) 
+  }
+  
+  textrect(coord[1,], 0.12, 0.08, lab = "PTB risk\nof F1")
+  textrect(coord[2,], 0.12, 0.08, lab = "Famine\nintensity")
+  textrect(coord[3,], 0.12, 0.08, lab = "PTB risk\nof F2")
+  
+  text(arrpos[1,1]-0.2, arrpos[1,2]+ 0.03, "Marginal effect", cex = 0.8, font = 4)
+  text(arrpos[1,1] - 0.2, arrpos[1,2] - 0.04, paste(paste(round(coef(apath)[2],2), " [", round(apath$ci.lb[2],2),", ", round(apath$ci.ub[2],2),"]", sep = ""), sep = ""), cex = 0.8, font = 3)
+  
+  text(arrpos[2,1]+0.18, arrpos[2,2]+ 0.03, "Marginal effect", cex = 0.8, font = 4)
+  text(arrpos[2,1]+0.18, arrpos[2,2] - 0.04, paste(paste(round(coef(bpath)[2],2), " [", round(bpath$ci.lb[2],2),", ", round(bpath$ci.ub[2],2),"]", sep = ""), sep = ""), cex = 0.8, font = 3)
+  
+  text(arrpos[3,1], arrpos[3,2]-0.04, "Direct effect", cex = 0.8, font = 4)
+  text(arrpos[3,1], arrpos[3,2]-0.11, paste(paste(round(coef(bpath)[3],2), " [", round(bpath$ci.lb[3],2),", ", round(bpath$ci.ub[3],2),"]", sep = ""), sep = ""), cex = 0.8, font = 3)
+  
+  text(mean(arrpos[,1]), mean(arrpos[,2])+ 0.03, "Mediation effect", cex = 0.9, font = 2)
+  text(mean(arrpos[,1]), mean(arrpos[,2]) - 0.04, paste(paste(round(indirect,2), " [", round(quantile(bootresult$t, 0.025),2),", ", round(quantile(bootresult$t, 0.975),2),"]", sep = ""), sep = ""), cex = 0.9)
+}
+
+plot_grid(fst1.1, fst1.2, fst1.3, nrow = 1, rel_widths = c(0.15, 0.25, 0.2))
 
 #===========================================================
 #    Figure S2 - heatmap PTB ratio

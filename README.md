@@ -53,7 +53,7 @@ The timing for F2 for different prefectures.
 
 * **mid.cohort** is the middle year of the defined F2 cohort group (Table S4).
 
-* **low.cohort** and **high.cohort** represent the lower and higher threshold for the cohort groups to remove when estimating the counterfactural effects. Due the overlap in cohort windows, one cohort group before and one cohort group after the F2 cohort gorup were removed.
+* **low.cohort** and **high.cohort** represent the lower and higher threshold for the cohort groups to remove when estimating the counterfactural effects, which were estimated by observing the lower-than-expected population size in 2000 census data. 
 
 ### 5. Sichuan_City.shp
 

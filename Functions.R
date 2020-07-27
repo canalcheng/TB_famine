@@ -1,6 +1,6 @@
 
 # apcglmkfit
-# The apclinkfit() function in APCG1 package was adapted to handle generalized linear regression
+# The apclinkfit() function and apcglmfit() function in APCG1 package was coupled to handle generalized linear regression with unequal age and cohort span. The input parameters are the same as the original functions
 apcglmkfit <- function(r, header = F, n.risk = NA, fam = "loglin", Plot = F, pylim = c(0, 0), Scale = 1e-05, c1 = 1, c2 = 1, cc = 1, lindex = 0, lvalue = 0, amin = 1, pmin = 1, cmin = 1, n.interval = 1, stderrplot = T, pcex = 1, p0 = 1, k = 1, agapyr = 1, lambda = 0, pgapyr = 1, cgapyr = 1){
   
   # header and design matrix
@@ -121,212 +121,8 @@ apcglmkfit <- function(r, header = F, n.risk = NA, fam = "loglin", Plot = F, pyl
   return(out)
 }
 
-# used by the apcglmkfit function internally
-apclinkfit_run_update <- function (r, c1 = 1, c2 = 1, cc = 1, apc = 0, lambda = 0, gamma = 2, Plot = F, CIplot = T, transform = "log", panelplot = T, amin = 1, pmin = 1, cmin = 1, agapyr = 1, pgapyr = 1, cgapyr = 1, p0 = 0, k = 1, header = F, resid.out = F, ModelDiag = F, Diaglim = c(0, 0), Diag.na = c(0, 0), pplim = c(0, 0)) 
-{
-  if (header == T) {
-    age = floor(as.numeric(dimnames(r)[[1]]))
-    period = floor(as.numeric(dimnames(r)[[2]]))
-    cohort0 = period[1] - age[length(age)]
-    if (age[2] - age[1] != age[3] - age[2]) 
-      age[1] = 2 * age[2] - age[3]
-    if (period[2] - period[1] != period[3] - period[2]) 
-      period[1] = 2 * period[2] - period[3]
-  }
-  a <- nrow(r)
-  p <- ncol(r)
-  if (transform == "log") 
-    r = log(r)
-  y <- c(t(r))
-  x <- APCG1:::apckmat(a, p, p0 = p0, k = k)
-  n.coh = ncol(x) - a - p + 2
-  if (cmin > 1000) 
-    cohort0 = cmin
-  cohort = cohort0 + (1:n.coh - 1) * (age[3] - age[2])
-  if (header == F) {
-    age = amin + agapyr * (1:a - 1)
-    period = pmin + pgapyr * (1:p - 1)
-    cohort = cmin + cgapyr * (1:(ncol(x) - a - p + 1))
-  }
-  if (apc == 0) {
-    v <- eigen(t(x) %*% x)$vector
-    xx <- x %*% v[, -(ncol(v))]
-    if (prod(Diag.na) > 0) {
-      if (length(as.vector(Diag.na)) == 2) 
-        r[Diag.na[1], Diag.na[2]] = -Inf
-      else for (i in 1:(length(as.vector(Diag.na))/2)) r[Diag.na[i, 
-                                                                 1], Diag.na[i, 2]] = -Inf
-    }
-    r = as.vector(t(r))
-    r.na = (r == -Inf)
-    y = r[!r.na]
-    x.no.na = xx[!r.na, ]
-    xx = x.no.na
-    fit <- lm(y ~ xx - 1)
-    b <- as.vector(v %*% as.matrix(c(fit$coef, 0)))
-    aa <- b[1:(a - 1) + 1]
-    pp <- b[2:p + a - 1]
-    coh <- b[-1:-(a + p - 1)]
-    n.coh = length(coh) + 1
-    bvar.red <- diag(summary.lm(fit)$coef[, 2]) %*% summary.lm(fit, 
-                                                               corr = T)$corr %*% diag(summary.lm(fit)$coef[, 2])
-    bvar <- v %*% (cbind(rbind(bvar.red, 0), 0)) %*% t(v)
-    alast.se <- sqrt(t(as.matrix(rep(-1, a - 1))) %*% bvar[2:a, 
-                                                           2:a] %*% as.matrix(rep(-1, a - 1)))
-    plast.se <- sqrt(t(as.matrix(rep(-1, p - 1))) %*% bvar[2:p - 
-                                                             1 + a, 2:p - 1 + a] %*% as.matrix(rep(-1, p - 1)))
-    clast.se <- sqrt(t(as.matrix(rep(-1, n.coh - 1))) %*% 
-                       bvar[-1:-(p - 1 + a), -1:-(p - 1 + a)] %*% as.matrix(rep(-1, 
-                                                                                n.coh - 1)))
-    b.para <- cbind(c(b[1], aa, -sum(aa), pp, -sum(pp), coh, 
-                      -sum(coh)), c(sqrt(diag(bvar[1:a, 1:a])), alast.se, 
-                                    sqrt(diag(bvar[2:p + a - 1, 2:p + a - 1])), plast.se, 
-                                    sqrt(diag(bvar[-1:-(a + p - 1), -1:-(a + p - 1)])), 
-                                    clast.se))
-    b.para.full = cbind(b.para, Tval <- b.para[, 1]/b.para[, 
-                                                           2], 2 * (1 - pt(abs(Tval), summary(fit)$df)))
-    anames = paste("Age ", as.character(age))
-    pnames = paste("Period ", as.character(period))
-    cnames = paste("Cohort ", as.character(cohort))
-    dimnames(b.para.full)[[1]] = c("intercept", anames, pnames, 
-                                   cnames)
-    dimnames(b.para.full)[[2]] = c("Parameter", "Standard.Error", 
-                                   "t", "P-value")
-  }
-  if (apc > 0) {
-    xc <- constr(x[, -1], a, p, c1, c2, cc, apc)
-    fit <- lm(y ~ xc)
-    sol$inter <- fit$coef[1]
-    if (apc == 1) {
-      aa <- fit$coef[2:(a - 1)]
-      aa <- c(aa[1:(c2 - 1)], cc * aa[c1], aa[-1:-(c2 - 
-                                                     1)])
-      pp <- fit$coef[a:(a + p - 2)]
-      coh <- fit$coef[-1:-(a + p - 2)]
-    }
-    if (apc == 2) {
-      aa <- fit$coef[2:a]
-      pp <- fit$coef[(a + 1):(a + p - 2)]
-      pp <- c(pp[1:(c2 - 1)], cc * pp[c1], pp[-1:-(c2 - 
-                                                     1)])
-      coh <- fit$coef[-1:-(a + p - 2)]
-    }
-    if (apc == 3) {
-      aa <- fit$coef[2:a]
-      pp <- fit$coef[(a + 1):(a + p - 1)]
-      coh <- fit$coef[(a + p):length(fit$coef)]
-      coh <- c(coh[1:(c2 - 1)], cc * coh[c1], coh[-1:-(c2 - 
-                                                         1)])
-    }
-  }
-  if (CIplot == T) {
-    alim = range(b.para[1:a + 1, 1] + 1.96 * b.para[1:a + 
-                                                      1, 2], b.para[1:a + 1, 1] - 1.96 * b.para[1:a + 1, 
-                                                                                                2])
-    plim = range(b.para[1:p + a + 1, 1] + 1.96 * b.para[1:p + 
-                                                          a + 1, 2], b.para[1:p + a + 1, 1] - 1.96 * b.para[1:p + 
-                                                                                                              a + 1, 2])
-    clim = range(b.para[-1:-(a + p + 1), 1] + 1.96 * b.para[-1:-(a + 
-                                                                   p + 1), 2], b.para[-1:-(a + p + 1), 1] - 1.96 * b.para[-1:-(a + 
-                                                                                                                                 p + 1), 2])
-  }
-  if (CIplot == F) {
-    alim = range(b.para[1:a + 1, 1])
-    plim = range(b.para[1:p + a + 1, 1])
-    clim = range(b.para[-1:-(a + p + 1), 1])
-  }
-  if (sum(abs(pplim)) > 0) {
-    alim = plim = clim = pplim
-  }
-  if (panelplot == T) 
-    par(mfrow = c(2, 2))
-  if (Plot == T) {
-    plot(age, c(aa, -sum(aa)), ylab = "effect", type = "l", 
-         ylim = alim)
-    points(age, c(aa, -sum(aa)))
-    title(main = "Age effect")
-    if (CIplot == T) {
-      lines(age, b.para[1:a + 1, 1] - 1.96 * b.para[1:a + 
-                                                      1, 2], lty = 2)
-      lines(age, b.para[1:a + 1, 1] + 1.96 * b.para[1:a + 
-                                                      1, 2], lty = 2)
-    }
-    plot(period, c(pp, -sum(pp)), ylab = "effect", type = "l", 
-         ylim = plim)
-    points(period, c(pp, -sum(pp)))
-    title(main = "Period effect")
-    if (CIplot == T) {
-      lines(period, b.para[1:p + a + 1, 1] - 1.96 * b.para[1:p + 
-                                                             a + 1, 2], lty = 2)
-      lines(period, b.para[1:p + a + 1, 1] + 1.96 * b.para[1:p + 
-                                                             a + 1, 2], lty = 2)
-    }
-    if (panelplot == T) 
-      par(mfrow = c(2, 1), new = T, fig = c(0, 1, 0, 0.56), 
-          cex = 0.85)
-    plot(cohort, c(coh, -sum(coh)), ylab = "effect", type = "l", 
-         ylim = clim)
-    points(cohort, c(coh, -sum(coh)))
-    title(main = "Cohort effect")
-    if (CIplot == T) {
-      lines(cohort, b.para[-1:-(p + a + 1), 1] - 1.96 * 
-              b.para[-1:-(p + a + 1), 2], lty = 2)
-      lines(cohort, b.para[-1:-(p + a + 1), 1] + 1.96 * 
-              b.para[-1:-(p + a + 1), 2], lty = 2)
-    }
-    par(mfrow = c(1, 1))
-  }
-  if (ModelDiag == T) {
-    plot(fit$fitted, fit$residual, xlab = "fitted value", 
-         ylab = "residual")
-    abline(a = 0, b = 0, col = 2)
-    title(main = "Residual plot for linear model diagnostics")
-    if (var(Diaglim) > 0) {
-      abline(a = Diaglim[1], b = 0, lty = 2, col = 4)
-      abline(a = Diaglim[2], b = 0, lty = 2, col = 4)
-      obs.id = c((1:length(y))[fit$resid >= max(Diaglim)], 
-                 (1:length(y))[fit$resid <= min(Diaglim)])
-      n.obs.id = length(obs.id)
-      outlier.obs = matrix(NA, n.obs.id, 4)
-      for (i in 1:n.obs.id) {
-        outlier.obs[i, 1] = fit$resid[obs.id[i]]
-        outlier.obs[i, 2] = y[obs.id[i]]
-        outlier.obs[i, 3] = 1 + floor((obs.id[i] - 1)/p)
-        outlier.obs[i, 4] = obs.id[i] - p * floor(obs.id[i]/p)
-        if (outlier.obs[i, 4] == 0) 
-          outlier.obs[i, 4] = p
-      }
-    }
-  }
-  Rsquare = c(summary(fit)$r.squared, summary(fit)$adj.r.squared, 
-              ncol(v) - 1)
-  names(Rsquare) = c("Rsquare", "Adjusted.Rsquare", "Model df")
-  Varcomp = c(summary(fit)$sig, summary(fit)$df[2])
-  names(Varcomp) = c("Variance Component", "Residual df")
-  sol <- vector("list")
-  sol$model = fit$call
-  sol$scale = transform
-  sol$Rsquare = Rsquare
-  sol$varcomp_df = Varcomp
-  sol$parameters = b.para.full
-  if (ModelDiag == T && var(Diaglim) > 0) 
-    sol$outlier = outlier.obs
-  sol$fitted = fit$fitted
-  sol$residual = fit$residual
-  return(sol)
-}
 
-# used by the apcglmkfit function internally
-apclinkfit_update <- function (r, Plot = F, CIplot = T, transform = "log", amin = 1,  pmin = 1, cmin = 1, agapyr = 1, lambda = 0, pgapyr = 1, cgapyr = 1,  p0 = 0, k = 1, header = F, ModelDiag = F, pplim = c(0, 0)) 
-{
-  out <- apclinkfit_run_update(r = r, apc = 0, lambda = 0, Plot = Plot, CIplot = CIplot, transform = transform, amin = amin,pmin = pmin, cmin = cmin, agapyr = agapyr, pgapyr = pgapyr, cgapyr = cgapyr, p0 = p0, k = k, header = header, resid.out = F, 
-ModelDiag = ModelDiag, Diaglim = c(0, 0), pplim = pplim)
-  return(out)
-}
-
-
-
-#' Format APC result
+#' Format APC model output to be a data frame
 #'
 #' @param apc.result apc mode
 #'
@@ -345,8 +141,7 @@ reshape.APC.result <- function(apc.result)
 
 
 
-
-#' Get ggplot color
+#' Get the default ggplot color
 #'
 #' @param n The number of colors to get
 #'
@@ -360,10 +155,25 @@ gg_color_hue <- function(n) {
 }
 
 
+# 
+#' Smooth province level cohort effect
+#'
+#' @param result.mf  APC results after cleaned by the reshape.APC.result() function
+#' @param F1.start   start time of the cohorts to be removed while estimating the counterfactual effect for F1
+#' @param F1.end    end time of the cohorts to be removed while estimating the counterfactual effect for F1
+#' @param F2.start   start time of the cohorts to be removed while estimating the counterfactual effect for F2
+#' @param F2.end    end time of the cohorts to be removed while estimating the counterfactual effect for F2
+#' @param method     method to use for the smoothing
+#'
+#' @return
+#' @export
+#'
+#' @examples
 province.cohort.smooth <- function(result.mf, F1.start = 1957, F1.end = 1963, F2.start = 1978, F2.end = 1990, method = c("GAM","loess"))
 {
   result.smooth <- NULL
   
+  # repeat for different sex
   for(i in 1:2)
   {
     current.result <- result.mf[result.mf$Sex == unique(result.mf$Sex)[i],]
@@ -396,7 +206,30 @@ province.cohort.smooth <- function(result.mf, F1.start = 1957, F1.end = 1963, F2
 }
 
 
-province.RR <- function(result.mf, result.mf.vcov, F1.start = 1957, F1.end = 1963, F2.start = 1978, F2.end = 1990, F2 = 1981, n.rep = 100, method = c("GAM","loess", "linear"), Sichuan.pop.long, Sichuan.case.long, ncores = 7)
+
+
+
+
+#' Estimate province-level IRR and number of averted cases
+#'
+#' @param result.mf  APC results after cleaned by the reshape.APC.result() function
+#' @param result.mf.vcov   a list of variance-covariance effects for the age, period, and cohort effects of males and females
+#' @param F1.start   start time of the cohorts to be removed while estimating the counterfactual effect for F1
+#' @param F1.end    end time of the cohorts to be removed while estimating the counterfactual effect for F1
+#' @param F2.start   start time of the cohorts to be removed while estimating the counterfactual effect for F2
+#' @param F2.end    end time of the cohorts to be removed while estimating the counterfactual effect for F2
+#' @param F2    the mid year of the F2 cohort
+#' @param n.rep   number of times to repeat
+#' @param method   smoothing method
+#' @param Sichuan.pop.long    population in the long format
+#' @param Sichuan.case.long   case count in the long format
+#' @param ncores     number of cores to use in the calculation
+#'
+#' @return
+#' @export
+#'
+#' @examples
+province.RR <- function(result.mf, result.mf.vcov, F1.start = 1957, F1.end = 1963, F2.start = 1978, F2.end = 1990, F2 = 1981, n.rep = 100, method = c("GAM","loess"), Sichuan.pop.long, Sichuan.case.long, ncores = 7)
 {
   result.RR <- NULL
   
@@ -548,7 +381,76 @@ province.RR <- function(result.mf, result.mf.vcov, F1.start = 1957, F1.end = 196
 }
 
 
+#' smooth the cohort effect of 21 prefectures
+#'
+#' @param result.mf  APC results after cleaned by the reshape.APC.result() function
+#' @param F1.start   start time of the cohorts to be removed while estimating the counterfactual effect for F1
+#' @param F1.end    end time of the cohorts to be removed while estimating the counterfactual effect for F1
+#' @param F2.start   start time of the cohorts to be removed while estimating the counterfactual effect for F2
+#' @param F2.end    end time of the cohorts to be removed while estimating the counterfactual effect for F2
+#' @param method     method to use for the smoothing
+#'
+#' @return
+#' @export
+#'
+#' @examples
+pref.cohort.smooth <- function(result.mf, F1.start = 1957, F1.end = 1963, F2.start = rep(1978,21), F2.end = rep(1990,21), method = c("GAM","loess"))
+{
+  result.smooth <- NULL
+  
+  result.mf$X <- as.numeric(result.mf$X)
+  
+  # repeat for 21 prefectures
+  for(i in 1:21)
+  {
+    current.result <- result.mf[result.mf$Pref == unique(result.mf$Pref)[i],]
+    current.cohort <- current.result[current.result$Type == "Cohort", c("X","parameter", "sd")]
+    colnames(current.cohort) <- c("Cohort","Cohort.effect.e","Cohort.std")
+    current.cohort$Pref <-  unique(result.mf$Pref)[i]
+    
+    # use span from expectation
+    # optimal df for GAM
+    current.cohort.rm <- current.cohort[!current.cohort$Cohort %in% c(seq(F1.start, F1.end,3), seq(F2.start[i], F2.end[i],3)),]
+    current.cohort.rm <- current.cohort.rm[c(-1,-2, -nrow(current.cohort.rm),-(nrow(current.cohort.rm)-1)),]
+    
+    if(method == "GAM")
+    {
+      current.gam <- gam(Cohort.effect.e ~ s(Cohort), data = current.cohort.rm)
+      current.cohort$cohort.predict <- predict(current.gam, newdata = data.frame(Cohort = current.cohort$Cohort))
+    }
+    
+    if(method == "loess")
+    {
+      current.cohort.loess <- loess.as(current.cohort.rm$Cohort, current.cohort.rm$Cohort.effect.e, criterion = "gcv")
+      current.cohort$cohort.predict <- predict(current.cohort.loess, newdata = data.frame(x = current.cohort$Cohort))
+    }
+    
+    result.smooth <- rbind(result.smooth, current.cohort)
+  }
+  
+  result.smooth
+}
 
+#' Estimate prefecture-level IRR and number of averted cases
+#'
+#' @param result.mf  APC results after cleaned by the reshape.APC.result() function
+#' @param result.mf.vcov   a list of variance-covariance effects for the age, period, and cohort effects of males and females
+#' @param F1.start   start time of the cohorts to be removed while estimating the counterfactual effect for F1
+#' @param F1.end    end time of the cohorts to be removed while estimating the counterfactual effect for F1
+#' @param F2.start   start time of the cohorts to be removed while estimating the counterfactual effect for F2, need one value for each prefecture
+#' @param F2.end    end time of the cohorts to be removed while estimating the counterfactual effect for F2, need one value for each prefecture
+#' @param F2    the mid year of the F2 cohort, need one value for each prefecture
+#' @param n.rep   number of times to repeat
+#' @param method   smoothing method
+#' @param Sichuan.pop.long    population in the long format
+#' @param collapse 
+#' @param ncore 
+#' @param Sichuan.case.long   case count in the long format
+#'
+#' @return
+#' @export
+#'
+#' @examples
 pref.RR <- function(result.mf, result.mf.vcov, F1.start = 1957, F1.end = 1963, F2.start = rep(1978,21), F2.end = rep(1990,21), F2 = rep(1981,21), n.rep = 100, method = c("GAM","loess"), Sichuan.pop.long, Sichuan.case.long, collapse = FALSE, ncore = 7)
 {
   result.mf$X <- as.numeric(result.mf$X)
@@ -699,38 +601,3 @@ pref.RR <- function(result.mf, result.mf.vcov, F1.start = 1957, F1.end = 1963, F
 
 
 
-pref.cohort.smooth <- function(result.mf, F1.start = 1957, F1.end = 1963, F2.start = rep(1978,21), F2.end = rep(1990,21), method = c("GAM","loess"))
-{
-  result.smooth <- NULL
-  
-  result.mf$X <- as.numeric(result.mf$X)
-  
-  for(i in 1:21)
-  {
-    current.result <- result.mf[result.mf$Pref == unique(result.mf$Pref)[i],]
-    current.cohort <- current.result[current.result$Type == "Cohort", c("X","parameter", "sd")]
-    colnames(current.cohort) <- c("Cohort","Cohort.effect.e","Cohort.std")
-    current.cohort$Pref <-  unique(result.mf$Pref)[i]
-    
-    # use span from expectation
-    # optimal df for GAM
-    current.cohort.rm <- current.cohort[!current.cohort$Cohort %in% c(seq(F1.start, F1.end,3), seq(F2.start[i], F2.end[i],3)),]
-    current.cohort.rm <- current.cohort.rm[c(-1,-2, -nrow(current.cohort.rm),-(nrow(current.cohort.rm)-1)),]
-    
-    if(method == "GAM")
-    {
-      current.gam <- gam(Cohort.effect.e ~ s(Cohort), data = current.cohort.rm)
-      current.cohort$cohort.predict <- predict(current.gam, newdata = data.frame(Cohort = current.cohort$Cohort))
-    }
-    
-    if(method == "loess")
-    {
-      current.cohort.loess <- loess.as(current.cohort.rm$Cohort, current.cohort.rm$Cohort.effect.e, criterion = "gcv")
-      current.cohort$cohort.predict <- predict(current.cohort.loess, newdata = data.frame(x = current.cohort$Cohort))
-    }
-    
-    result.smooth <- rbind(result.smooth, current.cohort)
-  }
-  
-  result.smooth
-}
