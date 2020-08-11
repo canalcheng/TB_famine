@@ -28,7 +28,7 @@ source("Functions.R")
 
 disease.dat <- read_csv(".\\Data\\Disease and population data.csv")   # prefecture-level disease and population data
 famine.intensity <- read_csv(".\\Data\\Famine intensity by pref.csv")  # prefecture-level famine intensity
-SC.pop <- read_csv(".\\Data\\Sichuan population projection.csv")   # population projection of the whole province
+SC.pop <- read_csv(".\\Data\\ichuan population projection.csv")   # population projection of the whole province
 pref.thres <- read_csv(".\\Data\\F2 time by prefecture population data.csv")
 
 
@@ -53,10 +53,15 @@ TB.inc.avg <- disease.dat %>% group_by(Pref, Pref.name) %>% dplyr::summarise(Pop
 SC.shp@data <- left_join(SC.shp@data, TB.inc.avg)
 
 # plot the CSSI
-f1.1 <- tm_shape(SC.shp) + tm_fill(c("CSSI"), breaks = classIntervals(SC.shp$CSSI, n = 5, style = "jenks")$brks, title = "", legend.format = list(fun = function(x) round(x, 2))) + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = "(A) Cohort size shrinkage index", inner.margins = c(0.02, 0.02, 0.08, 0.02), title.size = 1.1, frame = FALSE)
+f1.1 <- tm_shape(SC.shp) +
+  tm_fill(c("CSSI"), breaks = c(0.279, 0.35, 0.4, 0.45, 0.5, 0.58), title = "Cohort size shrinkage\nindex (CSSI)", legend.format = list(fun = function(x) round(x, 2))) +
+  tm_borders(col = "black") +
+  tm_text("Pref.name", size = 0.7) +
+  tm_legend(position = c("left","bottom")) +
+  tm_layout(title = "(A)", inner.margins = c(0.05, 0.10, 0.00, 0.00), title.size = 1.1, frame = FALSE, legend.title.size = 0.9)
 
 # plot the incidence rate
-f1.2 <- tm_shape(SC.shp) + tm_fill(c("incidence"), breaks = classIntervals(SC.shp$incidence, n = 5, style = "jenks")$brks, title = "", legend.format = list(fun = function(x) round(x, 0))) + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = "(B) Annual mean incidence rate (1/100,000)", inner.margins = c(0.02, 0.02, 0.08, 0.02), title.size = 1.1, frame = FALSE, legend.title.size = 0.9)
+f1.2 <- tm_shape(SC.shp) + tm_fill(c("incidence"), breaks = c(49.51, 80, 110, 140, 170, 210), title = "Annual mean incidence\nrate(1/100,000)", legend.format = list(fun = function(x) round(x, 0))) + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = "(B)", inner.margins = c(0.05, 0.10, 0.00, 0.00), title.size = 1.1, frame = FALSE, legend.title.size = 0.9)
 
 tmap_arrange(f1.1, f1.2)
 # tmap_save(tmap_arrange(f1.1, f1.2), ".\\Results\\Figure 1 CSSI and TB inc map.pdf", width = 5, height = 8.44, units = "in")
@@ -136,56 +141,60 @@ female.apc.result <- female.apc %>% reshape.APC.result() %>% mutate(Sex = "Femal
 result.mf.TB <- rbind(male.apc.result, female.apc.result) %>% mutate(X = as.numeric(X))
 result.mf.TB$Sex <- factor(result.mf.TB$Sex, levels = c("Male", "Female"))
 
+result.mf.TB <- result.mf.TB %>%
+  mutate(parameter.original = exp(parameter + sd^2/2), low.original = qlnorm(0.025, parameter, sd), high.original = qlnorm(0.975, parameter, sd))
+
+
 # TB age effect
 f3.1 <- result.mf.TB %>% 
   filter(Type == "Age" & X < 79) %>% 
-  ggplot(aes(x = X, y = parameter, col = Sex)) + 
+  ggplot(aes(x = X, y = parameter.original, col = Sex)) +  # IRRs, y axis on original scale
   geom_line() +
-  geom_ribbon(aes(x = X, ymin = parameter - 1.96*sd, ymax = parameter + 1.96*sd, fill = Sex), col = NA, alpha = 0.1) + 
-  geom_hline(yintercept = 0, linetype = "dotted") + 
+  geom_ribbon(aes(x = X, ymin = low.original, ymax = high.original, fill = Sex), col = NA, alpha = 0.25) + 
+  geom_hline(yintercept = 1, linetype = "dotted") + 
   ggtitle("(A) Age effect") + 
   theme(plot.title = element_text(hjust = 0)) +
   guides(col = FALSE, fill = FALSE) + 
-  labs(x = "Age at diagnosis", y = expression(alpha[i]), col = "", fill = "")+
+  labs(x = "Age at diagnosis", y = expression(e^alpha[i]), col = "", fill = "")+
   scale_color_manual(values = rev(gg_color_hue(2)))+
   scale_fill_manual(values = rev(gg_color_hue(2)))
 
 # period effect
 f3.2 <- result.mf.TB %>% 
   filter(Type == "Period") %>% 
-  ggplot(aes(x = X, y = parameter, col = Sex)) + 
+  ggplot(aes(x = X, y = parameter.original, col = Sex)) + 
   geom_line() +
-  geom_ribbon(aes(x = X, ymin = parameter - 1.96*sd, ymax = parameter + 1.96*sd, fill = Sex), col = NA, alpha = 0.1) + 
-  geom_hline(yintercept = 0, linetype = "dotted") + 
+  geom_ribbon(aes(x = X, ymin = low.original, ymax = high.original, fill = Sex), col = NA, alpha = 0.25) + 
+  geom_hline(yintercept = 1, linetype = "dotted") + 
   ggtitle("(B) Period effect") + 
   theme(plot.title = element_text(hjust = 0)) +
   guides(col = FALSE, fill = FALSE) + 
-  labs(x = "Year of diagnosis", y = expression(pi[j]), col = "", fill = "")+
+  labs(x = "Year of diagnosis", y = expression(e^pi[j]), col = "", fill = "")+
   scale_color_manual(values = rev(gg_color_hue(2)))+
   scale_fill_manual(values = rev(gg_color_hue(2)))
 
 # cohort effect
 TB.smooth <- province.cohort.smooth(result.mf.TB, F1.start = 1957, F1.end = 1963, F2.start = 1975, F2.end = 1987, method = "GAM")
 
-line_types <- c("Estimated"=1,"Expected"=2)
+line_types <- c("Estimated"=1,"Counterfactual"=2)
 
 f3.3 <- result.mf.TB %>% 
   filter(Type == "Cohort" & X >= 1930 & X <= 2000) %>% 
-  ggplot(aes(x = X, y = parameter, col = Sex)) + 
+  ggplot(aes(x = X, y = parameter.original, col = Sex)) + 
   geom_line(aes(linetype="Estimated")) +
-  geom_point(data = result.mf.TB[result.mf.TB$Type == "Cohort" & result.mf.TB$X == 1981,], aes(x = X, y = parameter, col = Sex), size = 2) +
-  geom_ribbon(aes(x = X, ymin = parameter - 1.96*sd, ymax = parameter + 1.96*sd, fill = Sex), col = NA, alpha = 0.1) + 
-  geom_hline(yintercept = 0, linetype = "dotted") + 
-  geom_line(data = TB.smooth[TB.smooth$Cohort >= 1930 & TB.smooth$Cohort <= 2000,], aes(x = Cohort, y = cohort.predict, linetype="Expected")) +
+  geom_point(data = result.mf.TB[result.mf.TB$Type == "Cohort" & result.mf.TB$X == 1981,], aes(x = X, y = exp(parameter), col = Sex), size = 2) +
+  geom_ribbon(aes(x = X, ymin = low.original, ymax = high.original, fill = Sex), col = NA, alpha = 0.25) + 
+  geom_hline(yintercept = 1, linetype = "dotted") + 
+  geom_line(data = TB.smooth[TB.smooth$Cohort >= 1930 & TB.smooth$Cohort <= 2000,], aes(x = Cohort, y = exp(cohort.predict), linetype="Counterfactual")) +
   geom_vline(xintercept = 1960) + 
   geom_vline(xintercept = 1981) + 
   geom_point(data = result.mf.TB[result.mf.TB$Type == "Cohort" & result.mf.TB$X == 1960,], aes(x = X, y = parameter, col = Sex), size = 2) + 
   ggtitle("(C) Cohort effect") + 
-  theme(plot.title = element_text(hjust = 0), legend.position = c(0.8, 0.9), legend.margin = unit(0, "cm")) +
-  labs(x = "Year of birth", y = expression(gamma[k]), col = "", fill = "") + 
-  annotate("text", 1960, 0.50, label = "F1", size = 6) +
-  annotate("text", 1981, 0.50, label = "F2", size = 6) +
-  ylim(-0.55, 0.50) +
+  theme(plot.title = element_text(hjust = 0), legend.position = c(0.75, 0.9), legend.margin = unit(0, "cm")) +
+  labs(x = "Year of birth", y = expression(e^gamma[k]), col = "", fill = "") + 
+  annotate("text", 1957, 1.6, label = "F1", size = 6) +
+  annotate("text", 1978, 1.6, label = "F2", size = 6) +
+  ylim(0.6, 1.6) +
   scale_color_manual(values = rev(gg_color_hue(2)))+
   scale_fill_manual(values = rev(gg_color_hue(2)))+ 
   scale_linetype_manual(name = "", values=line_types)
@@ -315,7 +324,8 @@ f4.1 <- TB.RR.SC.agg %>% filter(Generation == "F1.RR") %>% ggplot(aes(x = Sex, y
 # Panel B IRR map
 SC.shp@data <- left_join(SC.shp@data, TB.RR.agg[,c("Pref","F1.mean", "F2.mean")])
 
-tm_shape(SC.shp) + tm_fill(c("F1.mean"), breaks = classIntervals(SC.shp$F1.mean, n = 5, style = "quantile")$brks, title = "IRR", legend.format = list(fun = function(x) round(x, 2))) + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("(B) F1 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
+
+tm_shape(SC.shp) + tm_fill(c("F1.mean"), breaks = c(0.96, 1.10, 1.20, 1.30, 1.40, 1.54), title = "IRR", legend.format = list(fun = function(x) format(round(x, 2), digits = 2))) + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("(B) F1 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
 f4.2 <- grid.grab()  # need to adjust the plot size in Rstudio to make it appropriate for saving
 
 # panel c meta-regression
@@ -335,7 +345,7 @@ f4.3 <- ggplot() +
 
 f4 <- plot_grid(f4.1, f4.2, f4.3, rel_widths = c(0.15, 0.25, 0.25), nrow = 1)
 f4
-# save_plot(".\\Results\\Figure 4 F1 effect.pdf", Figure6, base_height = 4.07, base_width = 11)
+# save_plot(".\\Results\\Figure 4 F1 effect.pdf", f4, base_height = 4.07, base_width = 11)
 
 
 
@@ -388,7 +398,7 @@ fst1.1 <- TB.RR.SC.agg %>% filter(Generation == "F2.RR") %>% ggplot(aes(x = Sex,
   geom_errorbar(aes(width = .2)) + 
   geom_point() + 
   scale_color_manual(name = "",values = rev(gg_color_hue(2))) + 
-  ylim(1, 1.32) + 
+  ylim(1, 1.33) + 
   ylab("IRR") + 
   geom_hline(yintercept = 1, linetype = 3) + 
   xlab("") + 
@@ -399,7 +409,7 @@ fst1.1 <- TB.RR.SC.agg %>% filter(Generation == "F2.RR") %>% ggplot(aes(x = Sex,
 SC.shp@data <- SC.shp@data[,!names(SC.shp@data) %in% c("F1.mean","F2.mean")]
 SC.shp@data <- left_join(SC.shp@data, TB.RR.agg[,c("Pref","F1.mean", "F2.mean")])
 
-tm_shape(SC.shp) + tm_fill(c("F2.mean"), breaks = classIntervals(SC.shp$F2.mean, n = 5, style = "quantile")$brks, title = "IRR", legend.format = list(fun = function(x) round(x, 2)), textNA = "Excluded") + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("(B) F2 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
+tm_shape(SC.shp) + tm_fill(c("F2.mean"), breaks = c(0.99, 1.12, 1.25, 1.37, 1.50, 1.63), title = "IRR", legend.format = list(fun = function(x) round(x, 2)), textNA = "Excluded") + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("(B) F2 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
 fst1.2 <- grid.grab()
 
 
@@ -441,51 +451,34 @@ fst1.3 <- function()
 
 plot_grid(fst1.1, fst1.2, fst1.3, nrow = 1, rel_widths = c(0.15, 0.25, 0.2))
 
+# save_plot(".\\Results\\Figure ST1.1 F2 effect.pdf", plot_grid(fst1.1, fst1.2, fst1.3, nrow = 1, rel_widths = c(0.15, 0.25, 0.2)), base_height = 4.07, base_width = 11)
+
 #===========================================================
-#    Figure S2 - heatmap PTB ratio
+#    Figure S2 - incidence rate by age, cohort, and sex
 #===========================================================
-case.TB.Sichuan$incidence.scale <- ave(case.TB.Sichuan$incidence, paste(case.TB.Sichuan$Age, case.TB.Sichuan$Sex), FUN = function(x) x/x[1])
+diagnose.year.cohort <- data.frame(DiagnoseYear = 2005:2018, DiagnoseYear.new = c(rep(seq(2006, 2015, by = 3), each = 3), 2018, 2018))
 
+case.TB.Sichuan.inc <- case.TB.Sichuan %>%
+  mutate(Age = factor(Age, levels = unique(Age)), Age.num = 10+3*(as.numeric(Age) - 1), Sex = ifelse(Sex == 0, "(B) Female", "(A) Male"), Sex = factor(Sex, levels = c("(A) Male","(B) Female"))) %>%
+  left_join(diagnose.year.cohort) %>%
+  mutate(Cohort = DiagnoseYear.new - Age.num)%>%
+  group_by(Cohort, Age, Sex) %>%
+  summarise(CaseCount = sum(CaseCount), Population = sum(Population)) %>%
+  ungroup() %>%
+  mutate(incidence = CaseCount/Population*100000)
 
-# male
-qn = quantile(case.TB.Sichuan$incidence.scale[case.TB.Sichuan$Sex == 1], seq(0.1,0.9,length.out = 18), na.rm = TRUE)
-qn01 <- sort(rescale(c(qn, range(case.TB.Sichuan$incidence.scale[case.TB.Sichuan$Sex == 1]))) )
-gg.inc.male <- ggplot(case.TB.Sichuan[case.TB.Sichuan$Sex == 1,], aes(DiagnoseYear, Age)) + 
-  geom_abline(intercept = seq(-642.6667,-681.6667,-1), slope = 1/3, size = 0.5) + 
-  geom_tile(aes(fill = incidence.scale), color = NA, alpha = 0.9) + 
-  scale_fill_gradientn(colours = colorRampPalette(rev(brewer.pal(8, "RdYlBu")))(20),values = qn01) + 
-  annotate("text", x = 2017.5, y = 17.7, label = "F1") + 
-  annotate("text", x = 2017.5, y = 10.7, label = "F2") + 
-  geom_abline(intercept = -662.6667, slope = 1/3, size = 1) + 
-  geom_abline(intercept = -655.6667, slope = 1/3, size = 1) + 
-  labs(x = "Year of diagnosis", y = "Age group", fill = "IRR to 2005") + 
-  coord_fixed(ratio = 1) + 
-  theme(legend.position="bottom", legend.key.width = unit(0.7, "cm"), legend.key.height = unit(0.3,"cm"), legend.text = element_text(size = 10)) + 
-  scale_x_continuous(expand = c(0, 0), breaks = seq(2005, 2017,3), limits = c(2004.5,2018.5)) +  
-  scale_y_discrete(expand = c(0, 0))
-
-
-# female
-qn = quantile(case.TB.Sichuan$incidence[case.TB.Sichuan$Sex == 0], seq(0.1,0.9,length.out = 18), na.rm = TRUE)
-qn01 <- sort(rescale(c(qn, range(case.TB.Sichuan$incidence[case.TB.Sichuan$Sex == 0]))) )
-gg.inc.female <- ggplot(case.TB.Sichuan[case.TB.Sichuan$Sex == 0,], aes(DiagnoseYear, Age)) + 
-  geom_abline(intercept = seq(-642.6667,-681.6667,-1), slope = 1/3, size = 0.5) + 
-  geom_tile(aes(fill = incidence.scale), color = NA, alpha = 0.9) + 
-  scale_fill_gradientn(colours = colorRampPalette(rev(brewer.pal(8, "RdYlBu")))(20),values = qn01) + 
-  annotate("text", x = 2017.5, y = 17.7, label = "F1") + 
-  annotate("text", x = 2017.5, y = 10.7, label = "F2") + 
-  geom_abline(intercept = -662.6667, slope = 1/3, size = 1) + 
-  geom_abline(intercept = -655.6667, slope = 1/3, size = 1) + 
-  labs(x = "Year of diagnosis", y = "Age group", fill = "IRR to 2005") + 
-  coord_fixed(ratio = 1) + 
-  theme(legend.position="bottom", legend.key.width = unit(0.7, "cm"), legend.key.height = unit(0.3,"cm"), legend.text = element_text(size = 10)) + 
-  scale_x_continuous(expand = c(0, 0), breaks = seq(2005, 2017,3), limits = c(2004.5,2018.5)) +  
-  scale_y_discrete(expand = c(0, 0))
-
-Lexis <- plot_grid(gg.inc.male, gg.inc.female, labels = c("(A) Male","(B) Female"), nrow = 1)
-Lexis
-save_plot(".\\Results\\Figure S2 PTB heatmap ratio.pdf", Lexis, base_asp = 1.12, base_height = 7.2)
-
+colors = c("F1" = "red3", "F2" = "blue3")
+ggplot(case.TB.Sichuan.inc, aes(x = Age, y = incidence)) +
+  geom_line(aes(group = Cohort)) +
+  geom_line(data = case.TB.Sichuan.inc[case.TB.Sichuan.inc$Cohort == 1960, ], aes(x = Age, y = incidence, group = Cohort, col = "F1"), size = 1.2) +
+  geom_line(data = case.TB.Sichuan.inc[case.TB.Sichuan.inc$Cohort == 1981, ], aes(x = Age, y = incidence, group = Cohort, col = "F2"), size = 1.2) +
+  facet_wrap(~Sex, scales = "free") +
+  xlab("Age group") +
+  ylab("Incidence rate (1/100,000)") +
+  labs(col = "") +
+  theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5), legend.position = c(0.9, 0.9), strip.background = element_rect(fill = NA), strip.text = element_text(hjust = 0)) +
+  scale_color_manual(values = colors)
+# ggsave(".\\Results\\Figure S2.pdf", width = 8, height = 4)
 
 
 #===========================================================
@@ -503,7 +496,6 @@ for(i in 1:nrow(pref.heatmap))
   qn = quantile(current.case$incidence, seq(0.01,0.99,length.out = 18), na.rm = TRUE)
   qn01 <- sort(rescale(c(qn, range(current.case$incidence))) )
   
-  #  famine.polygons.F2 <- data.frame(ID = rep(1:5, each = 5), x = c(c(2004.5,2007.5, 2007.5, 2004.5, 2004.5) + rep(seq(0,by = 3, length.out = 4), each = 5), 2016.5,2018.5,2018.5,2016.5,2016.5), y = c(((2006-pref.thres$high.cohort[i])-10)/3+0.5, ((2006-pref.thres$high.cohort[i])-10)/3+0.5, ((2006-pref.thres$low.cohort[i])-10)/3+1.5, ((2006-pref.thres$low.cohort[i])-10)/3+1.5, ((2006-pref.thres$high.cohort[i])-10)/3+0.5) + rep(seq(from = 0, by = 1, length.out = 5), each = 5))
   famine.polygons.F2 <- data.frame(ID = rep(1:5, each = 5), x = c(c(2004.5,2007.5, 2007.5, 2004.5, 2004.5) + rep(seq(0,by = 3, length.out = 4), each = 5), 2016.5,2018.5,2018.5,2016.5,2016.5), y = c(668.8333-pref.thres$mid.cohort[pref.thres$pref == pref.heatmap$Pref[i]]/3, 668.8333-pref.thres$mid.cohort[pref.thres$pref == pref.heatmap$Pref[i]]/3, 668.8333-pref.thres$mid.cohort[pref.thres$pref == pref.heatmap$Pref[i]]/3+1, 668.8333-pref.thres$mid.cohort[pref.thres$pref == pref.heatmap$Pref[i]]/3+1, 668.8333-pref.thres$mid.cohort[pref.thres$pref == pref.heatmap$Pref[i]]/3) + rep(seq(from = 0, by = 1, length.out = 5), each = 5)-3)
   
   pref.hm[[i]] <- ggplot(current.case, aes(DiagnoseYear, Age)) + 
@@ -584,11 +576,11 @@ fs6
 #===========================================================
 #    Figure S7 - STBBI incidence rate map
 #===========================================================
-STI.inc.avg <- disease.dat %>% group_by(Pref, Pref.name) %>% summarise(Population = sum(Population), CaseCount = sum(CaseCount.STBBI)) %>% mutate(incidence = CaseCount/Population*100000) %>% ungroup() %>% mutate(Pref = as.numeric(Pref))
+STI.inc.avg <- disease.dat %>% group_by(Pref, Pref.name) %>% summarise(Population = sum(Population), CaseCount = sum(CaseCount.STBBI)) %>% mutate(STBBI.incidence = CaseCount/Population*100000) %>% ungroup() %>% mutate(Pref = as.numeric(Pref))
 
-SC.shp@data <- left_join(SC.shp@data, STI.inc.avg)
+SC.shp@data <- left_join(SC.shp@data, STI.inc.avg, by = c("Pref" = "Pref", "Pref.name" = "Pref.name"))
 
-fs7 <- tm_shape(SC.shp) + tm_fill(c("incidence"), breaks = classIntervals(SC.shp$incidence, n = 5, style = "jenks")$brks, title = "Annual mean STBBI\nincidence rate (1/100,000)") + tm_borders("black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom"), title = "") + tm_layout(inner.margins = c(0.02, 0.02, 0.02, 0.02), legend.title.size = 0.8)
+fs7 <- tm_shape(SC.shp) + tm_fill(c("STBBI.incidence"), breaks = classIntervals(SC.shp$STBBI.incidence, n = 5, style = "jenks")$brks, title = "Annual mean STBBI\nincidence rate (1/100,000)", legend.format = list(fun = function(x) format(round(x, 2), digits = 2))) + tm_borders("black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom"), title = "") + tm_layout(inner.margins = c(0.02, 0.02, 0.02, 0.02), legend.title.size = 0.8)
 
 # tmap_save(fs7, ".\\Results\\Figure S7 STBBI map.pdf", width = 5.5, height = 5, units = "in")
 
@@ -680,37 +672,40 @@ female.apc <- apcglmkfit(r = inc.table.female, n.risk = female.pop, header=TRUE,
 male.apc.result <- male.apc %>% reshape.APC.result() %>% mutate(Sex = "Male")
 female.apc.result <- female.apc %>% reshape.APC.result() %>% mutate(Sex = "Female")
 result.mf.STI <- rbind(male.apc.result, female.apc.result) %>% mutate(X = as.numeric(X))
-result.mf.STI$Sex <- factor(result.mf.STI$Sex, levels = c("Male", "Female"))
 
 result.mf.STI.vcov <- list(male.cov = list(a.vcov = male.apc$a.vcov, p.vcov = male.apc$p.vcov, c.vcov = male.apc$c.vcov), female.cov = list(a.vcov = female.apc$a.vcov, p.vcov = female.apc$p.vcov, c.vcov = female.apc$c.vcov))
 
+result.mf.STI <- result.mf.STI %>%
+  mutate(parameter.original = exp(parameter + sd^2/2), low.original = qlnorm(0.025, parameter, sd), high.original = qlnorm(0.975, parameter, sd))
+
+
 # STBBI age effect
 fs10.1 <- result.mf.STI %>% 
-  filter(Type == "Age") %>% 
-  ggplot(aes(x = X, y = parameter, col = Sex)) + 
+  filter(Type == "Age" & X < 79) %>% 
+  ggplot(aes(x = X, y = parameter.original, col = Sex)) +  # IRRs, y axis on original scale
   geom_line() +
-  geom_ribbon(aes(x = X, ymin = parameter - 1.96*sd, ymax = parameter + 1.96*sd, fill = Sex), col = NA, alpha = 0.1) + 
-  geom_hline(yintercept = 0, linetype = "dotted") + 
+  geom_ribbon(aes(x = X, ymin = low.original, ymax = high.original, fill = Sex), col = NA, alpha = 0.25) + 
+  geom_hline(yintercept = 1, linetype = "dotted") + 
   ggtitle("(A) Age effect") + 
   theme(plot.title = element_text(hjust = 0)) +
   guides(col = FALSE, fill = FALSE) + 
+  labs(x = "Age at diagnosis", y = expression(e^alpha[i]), col = "", fill = "")+
   scale_color_manual(values = rev(gg_color_hue(2)))+
-  scale_fill_manual(values = rev(gg_color_hue(2)))+ 
-  labs(x = "Age at diagnosis", y = expression(alpha[i]), col = "", fill = "")
+  scale_fill_manual(values = rev(gg_color_hue(2)))
 
 # period effect
 fs10.2 <- result.mf.STI %>% 
   filter(Type == "Period") %>% 
-  ggplot(aes(x = X, y = parameter, col = Sex)) + 
+  ggplot(aes(x = X, y = parameter.original, col = Sex)) +  # IRRs, y axis on original scale
   geom_line() +
-  geom_ribbon(aes(x = X, ymin = parameter - 1.96*sd, ymax = parameter + 1.96*sd, fill = Sex), col = NA, alpha = 0.1) + 
-  geom_hline(yintercept = 0, linetype = "dotted") + 
+  geom_ribbon(aes(x = X, ymin = low.original, ymax = high.original, fill = Sex), col = NA, alpha = 0.25) +
+  geom_hline(yintercept = 1, linetype = "dotted") + 
   ggtitle("(B) Period effect") + 
   theme(plot.title = element_text(hjust = 0)) +
   guides(col = FALSE, fill = FALSE) +   
   scale_color_manual(values = rev(gg_color_hue(2)))+
   scale_fill_manual(values = rev(gg_color_hue(2)))+ 
-  labs(x = "Year of diagnosis", y = expression(pi[j]), col = "", fill = "")
+  labs(x = "Year of diagnosis", y = expression(e^pi[j]), col = "", fill = "")
 
 # cohort effect
 STI.smooth <- province.cohort.smooth(result.mf.STI, F1.start = 1957, F1.end = 1963, F2.start = 1975, F2.end = 1987, method = "GAM")
@@ -719,21 +714,21 @@ line_types <- c("Estimated"=1,"Expected"=2)
 
 fs10.3 <- result.mf.STI %>% 
   filter(Type == "Cohort" & X >= 1933 & X <= 2000) %>% 
-  ggplot(aes(x = X, y = parameter, col = Sex)) + 
+  ggplot(aes(x = X, y = parameter.original, col = Sex)) +
   geom_line(aes(linetype="Estimated")) +
-  geom_ribbon(aes(x = X, ymin = parameter - 1.96*sd, ymax = parameter + 1.96*sd, fill = Sex), col = NA, alpha = 0.1) + 
-  geom_hline(yintercept = 0, linetype = "dotted") + 
-  geom_line(data = STI.smooth[STI.smooth$Cohort >= 1933 & STI.smooth$Cohort <= 2000,], aes(x = Cohort, y = cohort.predict, linetype="Expected")) +
-  geom_point(data = result.mf.STI[result.mf.STI$Type == "Cohort" & result.mf.STI$X == 1960,], aes(x = X, y = parameter, col = Sex), size = 2) + 
-  geom_point(data = result.mf.STI[result.mf.STI$Type == "Cohort" & result.mf.STI$X == 1981,], aes(x = X, y = parameter, col = Sex), size = 2) + 
+  geom_ribbon(aes(x = X, ymin = low.original, ymax = high.original, fill = Sex), col = NA, alpha = 0.25) +
+  geom_hline(yintercept = 1, linetype = "dotted") + 
+  geom_line(data = STI.smooth[STI.smooth$Cohort >= 1933 & STI.smooth$Cohort <= 2000,], aes(x = Cohort, y = exp(cohort.predict), linetype="Expected")) +
+  geom_point(data = result.mf.STI[result.mf.STI$Type == "Cohort" & result.mf.STI$X == 1960,], aes(x = X, y = exp(parameter), col = Sex), size = 2) + 
+  geom_point(data = result.mf.STI[result.mf.STI$Type == "Cohort" & result.mf.STI$X == 1981,], aes(x = X, y = exp(parameter), col = Sex), size = 2) + 
   geom_vline(xintercept = 1960) +
   geom_vline(xintercept = 1981) +
   ggtitle("(C) Cohort effect") + 
   theme(plot.title = element_text(hjust = 0), legend.position = c(0.8, 0.9), legend.margin = unit(0, "cm")) +
-  labs(x = "Year of birth", y = expression(gamma[k]), col = "", fill = "") + 
-  annotate("text", 1960, 1.2, label = "F1") +
-  annotate("text", 1981, 1.2, label = "F2") + 
-  ylim(-0.9,1.2)+
+  labs(x = "Year of birth", y = expression(e^gamma[k]), col = "", fill = "") + 
+  annotate("text", 1957, 3, label = "F1") +
+  annotate("text", 1978, 3, label = "F2") + 
+  ylim(0.4, 3) +
   scale_color_manual(values = rev(gg_color_hue(2)))+
   scale_fill_manual(values = rev(gg_color_hue(2)))+ 
   scale_linetype_manual(name = "", values=line_types)
@@ -741,7 +736,7 @@ fs10.3 <- result.mf.STI %>%
 left <- plot_grid(fs10.1, fs10.2, nrow = 2)
 plot_grid(left, fs10.3, nrow = 1, rel_widths = c(1,2))
 
-# save_plot(".\\Results\\Figure S10 APC results STBBI.pdf", plot_grid(left, f3.3, nrow = 1, rel_widths = c(1,2)), base_height  = 6.5, base_aspect_ratio = 1.5)
+# save_plot(".\\Results\\Figure S10 APC results STBBI.pdf", plot_grid(left, fs10.3, nrow = 1, rel_widths = c(1,2)), base_height  = 6.5, base_aspect_ratio = 1.5)
 
 
 
@@ -812,6 +807,8 @@ STI.Sichuan.agg.long <- STI.RR %>% gather(key = "Generation", value = "RR", F1.R
 
 Sichuan.pop.STI.long <- case.STI.nosex %>% filter(Pref != 5123)  %>% mutate(DiagnoseYear = rep(c(rep(seq(2006,2015,3), each = 3), 2018,2018),504), Age = fct_recode(Age, "[69,Inf)" = "[69,72)", "[69,Inf)" = "[72,75)","[69,Inf)" = "[75,78)","[69,Inf)" = "[78,Inf)")) %>% group_by(Pref, Age, DiagnoseYear) %>% dplyr::summarise(Population = round(sum(Population),0)) %>% ungroup() %>% dplyr::select(Pref,Age, DiagnoseYear, Population) %>% mutate(Age = rep(rep(seq(10,70,3), each = 5), 21))
 
+Sichuan.STI.case.long <- case.STI.nosex %>% filter(Pref != 5123)  %>% mutate(DiagnoseYear = rep(c(rep(seq(2006,2015,3), each = 3), 2018,2018),504), Age = fct_recode(Age, "[69,Inf)" = "[69,72)", "[69,Inf)" = "[72,75)","[69,Inf)" = "[75,78)","[69,Inf)" = "[78,Inf)")) %>% group_by(Pref, Age, DiagnoseYear) %>% dplyr::summarise(CaseCount = sum(CaseCount)) %>% ungroup() %>% dplyr::select(Pref,Age, DiagnoseYear, CaseCount) %>% mutate(Age = rep(rep(seq(10,70,3), each = 5), 21))
+
 STI.RR.all <- pref.RR(pref.STI, pref.STI.vcov, F1.start = 1957, F1.end = 1963, F2.start = pref.thres$low.cohort, F2.end = pref.thres$high.cohort, F2 = pref.thres$mid.cohort, n.rep = 1000, method = "GAM", Sichuan.pop.STI.long, Sichuan.STI.case.long, collapse = TRUE) 
 
 STI.RR.agg <- STI.RR.all %>% group_by(Pref) %>% summarise(F1.log.mean = mean(log(F1.RR)), F1.log.sd = sd(log(F1.RR)), F2.log.mean = mean(log(F2.RR)), F2.log.sd = sd(log(F2.RR)), F1.mean = mean(F1.RR), F2.mean = mean(F2.RR), F1.low = quantile(F1.RR, 0.025), F1.high = quantile(F1.RR, 0.975), F2.low = quantile(F2.RR, 0.025), F2.high = quantile(F2.RR, 0.975)) %>% left_join(famine.intensity[,c("Pref","CSSI")]) %>% left_join(SC.shp@data[, c("Pref","Pref.name")])
@@ -846,7 +843,7 @@ STI.RR.agg$size2 <- (1/STI.RR.agg$F2.log.sd)/(1/max(STI.RR.agg$F2.log.sd, na.rm 
 SC.shp@data <- SC.shp@data[,!names(SC.shp@data) %in% c("F1.mean","F2.mean")]
 SC.shp@data <- left_join(SC.shp@data, STI.RR.agg[,c("Pref","F1.mean", "F2.mean")])
 
-tm_shape(SC.shp) + tm_fill(c("F1.mean"), breaks = classIntervals(SC.shp$F1.mean, n = 5, style = "quantile")$brks, title = "IRR", legend.format = list(fun = function(x) round(x, 2))) + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("(B) F1 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
+tm_shape(SC.shp) + tm_fill(c("F1.mean"), breaks = c(0.95, 1.05, 1.15, 1.25, 1.35, 1.6), title = "IRR", legend.format = list(fun = function(x) format(round(x, 2),2))) + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("(B) F1 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
 fs14.2 <- grid.grab()
 
 
@@ -857,7 +854,7 @@ fs14.3 <- ggplot() +
   theme_cowplot() + 
   theme(plot.title = element_text(hjust = 0), legend.position = c(0.1, 0.9), plot.margin = unit(c(0.5,0.5,0,0.5), "cm")) + 
   geom_hline(yintercept = 1) + 
-  xlab("CSSI (%)") + 
+  xlab("CSSI") + 
   ylab("F1 IRR") + 
   guides(size = FALSE, col = FALSE) +
   ggtitle("(C) F1 meta regression")
@@ -869,5 +866,27 @@ plot_grid(fs14.1, fs14.2, fs14.3, rel_widths = c(0.15, 0.25, 0.25), nrow = 1)
 #===========================================================
 #    Figure S15 - famine effect on F2 STBBI
 #===========================================================
-fs15 <- tm_shape(SC.shp) + tm_fill(c("F2.mean"), breaks = classIntervals(SC.shp$F2.mean, n = 5, style = "quantile")$brks, title = "IRR", legend.format = list(fun = function(x) round(x, 2)), textNA = "Excluded") + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("F2 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
+fs15 <- tm_shape(SC.shp) + tm_fill(c("F2.mean"), breaks = c(0.85, 1.10, 1.35, 1.60, 1.85, 2.13), title = "IRR", legend.format = list(fun = function(x) format(round(x, 2),2)), textNA = "Excluded") + tm_borders(col = "black") + tm_text("Pref.name", size = 0.7) + tm_legend(position = c("left","bottom")) + tm_layout(title = expression(bold("F2 IRR by prefecture")), frame = FALSE, inner.margins = c(0, 0, 0.12, 0), title.size = 1.2)
+
 # tmap_save(fs15, ".\\Results\\Figure S15 F2 effect STBBI.pdf", width = 5, height = 4.5, units = "in")
+
+#===========================================================
+#    Figure S16 - F2 alternative definition
+#===========================================================
+F2.alt <- read_csv(".\\Data\\F2 alternative definition.csv")
+
+F2.definition1 <- data.frame(Pref = unique(result$Pref), year = c(1984, rep(1981,17), 1984, 1984, 1978))
+
+F2.definition1 <- F2.alt %>%
+  right_join(F2.definition1)
+
+ggplot(result, aes(x = year, y = F1.prop, group = Pref, col = as.factor(Pref.name)))+
+  geom_vline(xintercept = seq(1975,2000,5), col = "gray") +
+  geom_line() +
+  geom_point(data = result.max, aes(x = year, y = F1.prop, col = as.factor(Pref.name)), size = 0.9)+
+  ylab("Estimated proportion born to F1") +
+  xlab("Year of birth") +
+  labs(col = "Prefecture") +
+  guides(col=guide_legend(ncol=1)) +
+  scale_x_continuous(breaks = seq(1970,2000,5))
+ggsave(".\\Results\\Figure S16 F2 proportion.pdf", width = 8, height = 5)

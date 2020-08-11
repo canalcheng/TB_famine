@@ -45,6 +45,11 @@ The cohort size shrinkage index (CSSI) calculated for each prefecture.
 
 * **CSSI** is the cohort size shrinkage index.
 
+* **CSSI.Female** is the cohort size shrinkage index for female population.
+
+* **CSSI.Male** is the cohort size shrinkage index for male population.
+
+
 ### 4. F2 time by prefecture population data.csv
 
 The timing for F2 for different prefectures.
@@ -54,6 +59,7 @@ The timing for F2 for different prefectures.
 * **mid.cohort** is the middle year of the defined F2 cohort group (Table S4).
 
 * **low.cohort** and **high.cohort** represent the lower and higher threshold for the cohort groups to remove when estimating the counterfactural effects, which were estimated by observing the lower-than-expected population size in 2000 census data. 
+
 
 ### 5. Sichuan_City.shp
 
