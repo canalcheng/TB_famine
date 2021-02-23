@@ -28,7 +28,7 @@ source("Functions.R")
 
 disease.dat <- read_csv(".\\Data\\Disease and population data.csv")   # prefecture-level disease and population data
 famine.intensity <- read_csv(".\\Data\\Famine intensity by pref.csv")  # prefecture-level famine intensity
-SC.pop <- read_csv(".\\Data\\ichuan population projection.csv")   # population projection of the whole province
+SC.pop <- read_csv(".\\Data\\Sichuan population projection.csv")   # population projection of the whole province
 pref.thres <- read_csv(".\\Data\\F2 time by prefecture population data.csv")
 
 
@@ -889,4 +889,4 @@ ggplot(result, aes(x = year, y = F1.prop, group = Pref, col = as.factor(Pref.nam
   labs(col = "Prefecture") +
   guides(col=guide_legend(ncol=1)) +
   scale_x_continuous(breaks = seq(1970,2000,5))
-ggsave(".\\Results\\Figure S16 F2 proportion.pdf", width = 8, height = 5)
+# ggsave(".\\Results\\Figure S16 F2 proportion.pdf", width = 8, height = 5)
